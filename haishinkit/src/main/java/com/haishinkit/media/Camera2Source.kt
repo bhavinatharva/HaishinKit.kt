@@ -9,12 +9,15 @@ import android.hardware.camera2.CameraCaptureSession
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraDevice
 import android.hardware.camera2.CameraManager
+import android.hardware.camera2.CameraMetadata
 import android.hardware.camera2.CaptureRequest
+import android.os.Build
 import android.os.Handler
 import android.os.HandlerThread
 import android.util.Log
 import android.util.Size
 import android.view.Surface
+import androidx.annotation.RequiresApi
 import com.haishinkit.BuildConfig
 import com.haishinkit.graphics.ImageOrientation
 import com.haishinkit.net.NetStream
@@ -24,8 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * A video source that captures a camera by the Camera2 API.
  */
 class Camera2Source(
-    private val context: Context,
-    override var utilizable: Boolean = false
+    private val context: Context, override var utilizable: Boolean = false
 ) : VideoSource, CameraDevice.StateCallback() {
     /**
      * The Listener interface is the primary method for handling events.
@@ -59,8 +61,7 @@ class Camera2Source(
     override val isRunning = AtomicBoolean(false)
     override var resolution = Size(0, 0)
     private var cameraId: String = DEFAULT_CAMERA_ID
-    private var manager: CameraManager =
-        context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
+    private var manager: CameraManager = context.getSystemService(Context.CAMERA_SERVICE) as CameraManager
     private var handler: Handler? = null
         get() {
             if (field == null) {
@@ -219,17 +220,29 @@ class Camera2Source(
             }
         }
         requests.clear()
-        requests.add(
-            device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
-                listener?.onCreateCaptureRequest(this)
-                surfaces.forEach {
-                    addTarget(it)
-                }
+        val captureRequestBuilder = device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+        captureRequestBuilder.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_TORCH)
+        captureRequestBuilder.apply {
+            listener?.onCreateCaptureRequest(this)
+            surfaces.forEach {
+                addTarget(it)
             }
-        )
+        }
+        requests.add(captureRequestBuilder)
+//        requests.add(device.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW).apply {
+//            listener?.onCreateCaptureRequest(this)
+//            surfaces.forEach {
+//                addTarget(it)
+//            }
+//        })
+        requests.add(device.createCaptureRequest(CameraDevice.TEMPLATE_RECORD).apply {
+            listener?.onCreateCaptureRequest(this)
+            surfaces.forEach {
+                addTarget(it)
+            }
+        })
         device.createCaptureSession(
-            surfaces,
-            object : CameraCaptureSession.StateCallback() {
+            surfaces, object : CameraCaptureSession.StateCallback() {
                 override fun onConfigured(session: CameraCaptureSession) {
                     this@Camera2Source.session = session
                 }
@@ -237,8 +250,7 @@ class Camera2Source(
                 override fun onConfigureFailed(session: CameraCaptureSession) {
                     this@Camera2Source.session = null
                 }
-            },
-            handler
+            }, handler
         )
     }
 
@@ -267,5 +279,37 @@ class Camera2Source(
 
         private const val DEFAULT_CAMERA_ID = "0"
         private val TAG = Camera2Source::class.java.simpleName
+    }
+
+    fun isFlashAvailable(): Boolean? {
+        return characteristics?.get(CameraCharacteristics.FLASH_INFO_AVAILABLE)
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    fun turnOnFlash() {
+        try {
+            val captureRequestBuilder = device?.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+            captureRequestBuilder?.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_TORCH)
+            surfaces.forEach {
+                captureRequestBuilder?.addTarget(it)
+            }
+            session?.setRepeatingRequest(captureRequestBuilder?.build()!!, null, null)
+        } catch (e: CameraAccessException) {
+            e.printStackTrace()
+        }
+    }
+
+    @RequiresApi(Build.VERSION_CODES.M)
+    fun turnOffFlash() {
+        try {
+            val captureRequestBuilder = device?.createCaptureRequest(CameraDevice.TEMPLATE_PREVIEW)
+            captureRequestBuilder?.set(CaptureRequest.FLASH_MODE, CameraMetadata.FLASH_MODE_OFF)
+            surfaces.forEach {
+                captureRequestBuilder?.addTarget(it)
+            }
+            session?.setRepeatingRequest(captureRequestBuilder?.build()!!, null, null)
+        } catch (e: CameraAccessException) {
+            e.printStackTrace()
+        }
     }
 }

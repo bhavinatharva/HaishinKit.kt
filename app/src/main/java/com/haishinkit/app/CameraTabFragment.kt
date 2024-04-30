@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.hardware.camera2.CameraCharacteristics
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
@@ -133,6 +134,15 @@ class CameraTabFragment : Fragment(), IEventListener {
         }
 
         val switchButton = v.findViewById<Button>(R.id.switch_button)
+        val btnFlash = v.findViewById<Button>(R.id.btnFlash)
+        btnFlash.setOnClickListener {
+            Log.e(TAG, "onCreateView: ${cameraSource.isFlashAvailable()}")
+            if (cameraSource.isFlashAvailable()!!){
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                    cameraSource.turnOnFlash()
+                }
+            }
+        }
         switchButton.setOnClickListener {
             cameraSource.switchCamera()
         }
